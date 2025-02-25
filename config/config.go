@@ -1,13 +1,13 @@
 package config
 
+// Config holds configuration settings
 type Config struct {
 	ZMQPort string
 }
 
-// LoadConfig initializes and returns a Config object with default values for the application settings.
+// LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
-	// Hardcoded for local use
 	return &Config{
-		ZMQPort: "5555", // Local Port
+		ZMQPort: "5555",
 	}
 }
