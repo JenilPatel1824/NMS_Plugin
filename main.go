@@ -17,7 +17,4 @@ func main() {
 	// Start ZeroMQ Polling Engine
 	log.Info("Starting Polling Engine...")
 	handler.StartZMQServer(cfg, log)
-	go handler.StartZMQServer(cfg, log)
-	go handler.StartZMQServer(cfg, log)
-
 }
