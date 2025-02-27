@@ -6,7 +6,6 @@ type Config struct {
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
-
 	return &Config{
 		ZMQPort: "5555",
 	}

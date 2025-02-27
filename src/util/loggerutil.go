@@ -1,4 +1,4 @@
-package logger
+package util
 
 import (
 	"github.com/sirupsen/logrus"
@@ -15,6 +15,7 @@ func NewLogger() *logrus.Logger {
 	log.SetLevel(logrus.InfoLevel)
 
 	log.SetFormatter(&logrus.TextFormatter{
+
 		FullTimestamp: true,
 	})
 

@@ -1,27 +1,32 @@
-package handler
+package server
 
 import (
-	"GO_Plugin/config"
-	"GO_Plugin/snmp"
+	"GO_Plugin/src/config"
+	"GO_Plugin/src/plugin/snmp"
 	"encoding/json"
 	"fmt"
 	"github.com/pebbe/zmq4"
 	"github.com/sirupsen/logrus"
+	"strings"
 	"sync"
-	"time"
 )
 
 const (
 	routerAddrFormat  = "tcp://*:%s"
 	dealerAddr        = "inproc://workers"
-	numWorkers        = 10
+	numWorkers        = 5
 	errorKey          = "error"
 	detailKey         = "details"
 	invalidRequest    = "Invalid request format"
 	ipKey             = "ip"
 	communityKey      = "community"
 	versionKey        = "version"
-	ErrorMissingField = "Missing or null field"
+	errorMissingField = "Missing or null field"
+	pluginTypeKey     = "pluginType"
+	requestTypeKey    = "requestType"
+	snmpKey           = "snmp"
+	discoveryKey      = "discovery"
+	pollingKey        = "pollingKey"
 )
 
 // StartZMQRouter initializes and starts a ZeroMQ Router-Dealer pattern for handling client requests and worker responses.
@@ -134,10 +139,6 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 		log.Infof("Worker %d: Received request: %s", workerID, req)
 
-		startTime := time.Now()
-
-		log.Infof("Worker %d: Start time after receiving request: %v", workerID, startTime)
-
 		var reqData map[string]string
 
 		if err := json.Unmarshal([]byte(req), &reqData); err != nil {
@@ -167,7 +168,7 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			response := map[string]interface{}{
 
-				errorKey: ErrorMissingField,
+				errorKey: errorMissingField,
 
 				detailKey: missingFields,
 			}
@@ -192,39 +193,65 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 		version := reqData[versionKey]
 
-		result := snmp.FetchSNMPData(ip, community, version)
+		pluginType := reqData[pluginTypeKey]
 
-		jsonData, err := json.Marshal(result)
+		requestType := reqData[requestTypeKey]
 
-		if err != nil {
+		if strings.ToLower(pluginType) != snmpKey {
 
-			log.Errorf("Worker %d: Failed to marshal JSON: %v", workerID, err)
+			response := map[string]interface{}{
+
+				"status": "fail",
+
+				"message": "System type not supported",
+			}
+
+			jsonResponse, _ := json.Marshal(response)
+
+			worker.Send(string(jsonResponse), 0)
 
 			continue
 		}
 
-		log.Infof("Worker %d: Sending processed response: ", workerID)
+		switch strings.ToLower(requestType) {
 
-		_, err = worker.Send(string(jsonData), 0)
+		case discoveryKey:
 
-		if err != nil {
+			log.Infof("Worker %d: Processing discovery request: ", workerID)
 
-			log.Errorf("Worker %d: Failed to send response: %v", workerID, err)
+			responseMap := snmp.Discovery(ip, community, version)
 
-			continue
+			jsonResponse, _ := json.Marshal(responseMap)
 
-		} else {
+			worker.Send(string(jsonResponse), 0)
 
-			log.Infof("Worker %d: Sent response: ", workerID)
+		case pollingKey:
+
+			log.Infof("Worker %d: Processing polling request: ", workerID)
+
+			result := snmp.FetchSNMPData(ip, community, version)
+
+			jsonData, _ := json.Marshal(result)
+
+			log.Infof("Worker %d: End time after sending response: %v", workerID)
+
+			worker.Send(string(jsonData), 0)
+
+		default:
+
+			response := map[string]interface{}{
+
+				"status": "fail",
+
+				"message": "Request type not supported currently",
+			}
+
+			jsonResponse, _ := json.Marshal(response)
+
+			log.Infof("Worker %d: End time after sending response: %v", workerID)
+
+			worker.Send(string(jsonResponse), 0)
 		}
-
-		endTime := time.Now()
-
-		log.Infof("Worker %d: End time after sending response: %v", workerID, endTime)
-
-		timeTaken := endTime.Sub(startTime)
-
-		log.Infof("Worker %d: Time taken for this request: %v", workerID, timeTaken)
 	}
 }
 
@@ -236,13 +263,13 @@ func validateRequest(reqData map[string]string) (map[string]string, map[string]s
 
 	values := make(map[string]string)
 
-	for _, field := range []string{ipKey, communityKey, versionKey} {
+	for _, field := range []string{ipKey, communityKey, versionKey, pluginTypeKey, requestTypeKey} {
 
 		value, ok := reqData[field]
 
 		if !ok || value == "" {
 
-			missingFields[field] = ErrorMissingField
+			missingFields[field] = errorMissingField
 
 		} else {
 

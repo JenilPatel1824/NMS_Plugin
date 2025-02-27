@@ -1,19 +1,19 @@
 package main
 
 import (
-	"GO_Plugin/config"
-	"GO_Plugin/handler"
-	"GO_Plugin/logger"
+	"GO_Plugin/src/config"
+	"GO_Plugin/src/server"
+	"GO_Plugin/src/util"
 )
 
 // main is the entry point of the application. It initializes logging, loads configuration, and starts the ZeroMQ polling engine.
 func main() {
 
-	log := logger.NewLogger()
+	log := util.NewLogger()
 
 	cfg := config.LoadConfig()
 
 	log.Info("Starting Polling Engine...")
 
-	handler.StartZMQRouter(cfg, log)
+	server.StartZMQRouter(cfg, log)
 }
