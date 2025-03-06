@@ -26,14 +26,12 @@ const (
 	requestTypeKey    = "requestType"
 	snmpKey           = "snmp"
 	discoveryKey      = "discovery"
-	pollingKey        = "pollingKey"
+	pollingKey        = "polling"
+	requestIDKey      = "request_id"
 )
 
 // StartZMQRouter initializes and starts a ZeroMQ Router-Dealer pattern for handling client requests and worker responses.
-// It sets up a ROUTER socket for client communication and a DEALER socket for worker load balancing.
-// The function binds sockets, starts worker goroutines, and runs a proxy to manage request-response routing.
 func StartZMQRouter(cfg *config.Config, log *logrus.Logger) {
-
 	router, err := zmq4.NewSocket(zmq4.ROUTER)
 
 	if err != nil {
@@ -55,8 +53,6 @@ func StartZMQRouter(cfg *config.Config, log *logrus.Logger) {
 	}
 
 	defer dealer.Close()
-
-	dealerAddr := dealerAddr
 
 	routerAddr := fmt.Sprintf(routerAddrFormat, cfg.ZMQPort)
 
@@ -95,11 +91,7 @@ func StartZMQRouter(cfg *config.Config, log *logrus.Logger) {
 	wg.Wait()
 }
 
-// startWorker initializes a worker in a ZeroMQ Dealer-Worker pattern for processing SNMP requests and sending responses.
-// dealerAddr specifies the DEALER socket address the worker connects to.
-// workerID is a unique identifier for the worker instance.
-// log is the logging instance used to log worker operations and errors.
-// wg is a wait group that ensures coordinated goroutine execution completion.
+// startWorker initializes a worker for processing SNMP requests.
 func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.WaitGroup) {
 
 	defer wg.Done()
@@ -145,6 +137,8 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			errorResponse := map[string]string{
 
+				requestIDKey: reqData[requestIDKey],
+
 				errorKey: invalidRequest,
 
 				detailKey: err.Error(),
@@ -152,12 +146,7 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			errorJSON, _ := json.Marshal(errorResponse)
 
-			_, err := worker.Send(string(errorJSON), 0)
-
-			if err != nil {
-
-				continue
-			}
+			worker.Send(string(errorJSON), 0)
 
 			continue
 		}
@@ -168,6 +157,8 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			response := map[string]interface{}{
 
+				requestIDKey: reqData[requestIDKey],
+
 				errorKey: errorMissingField,
 
 				detailKey: missingFields,
@@ -175,14 +166,7 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			responseData, _ := json.Marshal(response)
 
-			_, err2 := worker.Send(string(responseData), 0)
-
-			if err2 != nil {
-
-				log.Errorf("Worker %d: Failed to send response: %v", workerID, err2)
-
-				continue
-			}
+			worker.Send(string(responseData), 0)
 
 			continue
 		}
@@ -197,15 +181,18 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 		requestType := reqData[requestTypeKey]
 
+		requestID := reqData[requestIDKey]
+
 		if strings.ToLower(pluginType) != snmpKey {
 
 			response := map[string]interface{}{
+
+				requestIDKey: requestID,
 
 				"status": "fail",
 
 				"message": "System type not supported",
 			}
-
 			jsonResponse, _ := json.Marshal(response)
 
 			worker.Send(string(jsonResponse), 0)
@@ -221,6 +208,8 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			responseMap := snmp.Discovery(ip, community, version)
 
+			responseMap[requestIDKey] = requestID
+
 			jsonResponse, _ := json.Marshal(responseMap)
 
 			worker.Send(string(jsonResponse), 0)
@@ -231,15 +220,19 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			result := snmp.FetchSNMPData(ip, community, version)
 
+			result[requestIDKey] = requestID
+
 			jsonData, _ := json.Marshal(result)
 
-			log.Infof("Worker %d: End time after sending response: %v", workerID)
+			log.Infof("Worker %d: sending back response: ", workerID)
 
 			worker.Send(string(jsonData), 0)
 
 		default:
 
 			response := map[string]interface{}{
+
+				requestIDKey: requestID,
 
 				"status": "fail",
 
@@ -255,15 +248,14 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 	}
 }
 
-// validateRequest checks the presence of required fields in the request data and identifies missing or empty fields.
-// It returns a map of valid fields with their corresponding values, and a map of missing fields with error messages.
+// validateRequest checks the presence of required fields in the request data.
 func validateRequest(reqData map[string]string) (map[string]string, map[string]string) {
 
 	missingFields := make(map[string]string)
 
 	values := make(map[string]string)
 
-	for _, field := range []string{ipKey, communityKey, versionKey, pluginTypeKey, requestTypeKey} {
+	for _, field := range []string{ipKey, communityKey, versionKey, pluginTypeKey, requestTypeKey, requestIDKey} {
 
 		value, ok := reqData[field]
 
@@ -276,6 +268,5 @@ func validateRequest(reqData map[string]string) (map[string]string, map[string]s
 			values[field] = value
 		}
 	}
-
 	return values, missingFields
 }

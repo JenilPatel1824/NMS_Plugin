@@ -21,7 +21,6 @@ const (
 	Error              = "interfaces.error"
 	indexKey           = "index"
 	physicalAddressKey = "interface.physical.address"
-	speedKey           = "interface.speed"
 )
 
 // FetchSNMPData retrieves SNMP data from the specified device using provided IP, community, and SNMP version.
@@ -53,14 +52,14 @@ func FetchSNMPData(ip, community, version string) map[string]interface{} {
 		g.Version = gosnmp.Version2c
 	}
 
+	defer g.Conn.Close()
+
 	err := g.Connect()
 
 	if err != nil {
 
 		return map[string]interface{}{"error": fmt.Sprintf("Error connecting to SNMP target: %s", err)}
 	}
-
-	defer g.Conn.Close()
 
 	systemData, err := fetchSNMPSystemData(g)
 
@@ -248,11 +247,6 @@ func getInterface(i int, g *gosnmp.GoSNMP) (map[string]interface{}, error) {
 
 			interfaceData[field] = value
 		}
-	}
-	if speed, ok := interfaceData[speedKey].(uint); ok {
-
-		interfaceData[speedKey] = speed / 1000000
-
 	}
 
 	return interfaceData, nil

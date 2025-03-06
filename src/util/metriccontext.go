@@ -22,7 +22,7 @@ var InterfaceOids = map[string]string{
 	"1.3.6.1.2.1.2.2.1.14":    "interface.received.error.packets",
 	"1.3.6.1.2.1.2.2.1.16":    "interface.sent.octets",
 	"1.3.6.1.2.1.2.2.1.10":    "interface.received.octets",
-	"1.3.6.1.2.1.2.2.1.5":     "interface.speed",
+	"1.3.6.1.2.1.31.1.1.1.15": "interface.speed",
 	"1.3.6.1.2.1.2.2.1.6":     "interface.physical.address",
 	"1.3.6.1.2.1.2.2.1.13":    "interface.discard.packets",
 	"1.3.6.1.2.1.2.2.1.11":    "interface.in.packets",

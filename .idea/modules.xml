@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/GO_Plugin.iml" filepath="$PROJECT_DIR$/.idea/GO_Plugin.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/PluginEngine.iml" filepath="$PROJECT_DIR$/.idea/PluginEngine.iml" />
     </modules>
   </component>
 </project>
