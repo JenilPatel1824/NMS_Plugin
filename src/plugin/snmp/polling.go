@@ -26,21 +26,33 @@ const (
 // FetchSNMPData retrieves SNMP data from the specified device using provided IP, community, and SNMP version.
 // The function returns a map containing system information and interface details or an error description.
 // It initializes an SNMP connection, fetches system-level data, extracts interface count, and retrieves interface details.
-func FetchSNMPData(ip, community, version string) map[string]interface{} {
+func FetchSNMPData(reqData map[string]interface{}) {
 
-	fmt.Println("calling fetch snmp data")
+	if ValidateRequest(reqData) {
 
-	g := &gosnmp.GoSNMP{
-		Target:    ip,
-		Community: community,
-		Port:      161,
-		Timeout:   2 * time.Second,
-		Retries:   2,
+		reqData[Error_] = "field missing"
+
+		reqData[Status] = "fail"
+
+		return
 	}
 
-	fmt.Println("switching version fetch snmpsys data")
+	ip := reqData[IP]
+
+	community := reqData[Community]
+
+	version := reqData[Version]
+
+	g := &gosnmp.GoSNMP{
+		Target:    ip.(string),
+		Port:      161,
+		Community: community.(string),
+		Timeout:   time.Second * 2,
+		Retries:   3,
+	}
 
 	switch version {
+
 	case "1":
 		g.Version = gosnmp.Version1
 
@@ -51,9 +63,12 @@ func FetchSNMPData(ip, community, version string) map[string]interface{} {
 		g.Version = gosnmp.Version3
 
 	default:
-		log.Printf("Unsupported SNMP version: %s. Defaulting to Version2c", version)
 
-		g.Version = gosnmp.Version2c
+		reqData[Error_] = "unsupported SNMP version"
+
+		reqData[Status] = "fail"
+
+		return
 	}
 
 	err := g.Connect()
@@ -62,14 +77,33 @@ func FetchSNMPData(ip, community, version string) map[string]interface{} {
 
 	if err != nil {
 
-		return map[string]interface{}{"error": fmt.Sprintf("Error connecting to SNMP target: %s", err)}
+		reqData[Data] = map[string]interface{}{
+
+			Error_: SNMPConnectFail,
+
+			"message": err.Error(),
+		}
+
+		reqData[Status] = Fail
+
+		return
+
 	}
 
 	systemData, err := fetchSNMPSystemData(g)
 
 	if err != nil {
 
-		return map[string]interface{}{"error": fmt.Sprintf("Error fetching SNMP system data: %s", err)}
+		reqData[Data] = map[string]interface{}{
+
+			Error_: SNMPConnectFail,
+
+			"message": err.Error(),
+		}
+
+		reqData["status"] = "success"
+
+		return
 	}
 
 	numberOfInterface, _ := systemData[systemInterfaces].(int)
@@ -84,9 +118,9 @@ func FetchSNMPData(ip, community, version string) map[string]interface{} {
 
 	data[systemObjectID] = systemData[systemObjectID]
 
-	uptimeCentiseconds := systemData[systemUptime].(uint32)
+	uptime := systemData[systemUptime].(uint32)
 
-	uptimeSeconds := uptimeCentiseconds / 100
+	uptimeSeconds := uptime / 100
 
 	days := uptimeSeconds / (24 * 3600)
 
@@ -124,7 +158,12 @@ func FetchSNMPData(ip, community, version string) map[string]interface{} {
 		data[interfaces] = []map[string]string{}
 
 	}
-	return data
+
+	reqData[Data] = data
+
+	reqData[Status] = Success
+
+	return
 }
 
 // fetchSNMPSystemData queries SNMP system data using provided GoSNMP instance and configured OIDs.

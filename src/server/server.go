@@ -12,22 +12,18 @@ import (
 )
 
 const (
-	routerAddrFormat  = "tcp://*:%s"
-	dealerAddr        = "inproc://workers"
-	numWorkers        = 5
-	errorKey          = "error"
-	detailKey         = "details"
-	invalidRequest    = "Invalid request format"
-	ipKey             = "ip"
-	communityKey      = "community"
-	versionKey        = "version"
-	errorMissingField = "Missing or null field"
-	pluginTypeKey     = "pluginType"
-	requestTypeKey    = "requestType"
-	snmpKey           = "snmp"
-	discoveryKey      = "discovery"
-	pollingKey        = "polling"
-	requestIDKey      = "request_id"
+	routerAddrFormat = "tcp://*:%s"
+	dealerAddr       = "inproc://workers"
+	numWorkers       = 5
+	errorKey         = "error"
+	detailKey        = "details"
+	invalidRequest   = "Invalid request format"
+	requestTypeKey   = "requestType"
+	discoveryKey     = "discovery"
+	pollingKey       = "polling"
+	requestIDKey     = "request_id"
+	status           = "status"
+	fail             = "fail"
 )
 
 // StartZMQRouter initializes and starts a ZeroMQ Router-Dealer pattern for handling client requests and worker responses.
@@ -131,17 +127,19 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 		log.Infof("Worker %d: Received request: %s", workerID, req)
 
-		var reqData map[string]string
+		var reqData map[string]interface{}
 
 		if err := json.Unmarshal([]byte(req), &reqData); err != nil {
 
 			errorResponse := map[string]string{
 
-				requestIDKey: reqData[requestIDKey],
+				requestIDKey: reqData[requestIDKey].(string),
 
 				errorKey: invalidRequest,
 
 				detailKey: err.Error(),
+
+				status: fail,
 			}
 
 			errorJSON, _ := json.Marshal(errorResponse)
@@ -151,66 +149,17 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 			continue
 		}
 
-		_, missingFields := validateRequest(reqData)
-
-		if len(missingFields) > 0 {
-
-			response := map[string]interface{}{
-
-				requestIDKey: reqData[requestIDKey],
-
-				errorKey: errorMissingField,
-
-				detailKey: missingFields,
-			}
-
-			responseData, _ := json.Marshal(response)
-
-			worker.Send(string(responseData), 0)
-
-			continue
-		}
-
-		ip := reqData[ipKey]
-
-		community := reqData[communityKey]
-
-		version := reqData[versionKey]
-
-		pluginType := reqData[pluginTypeKey]
-
 		requestType := reqData[requestTypeKey]
 
-		requestID := reqData[requestIDKey]
-
-		if strings.ToLower(pluginType) != snmpKey {
-
-			response := map[string]interface{}{
-
-				requestIDKey: requestID,
-
-				"status": "fail",
-
-				"message": "System type not supported",
-			}
-			jsonResponse, _ := json.Marshal(response)
-
-			worker.Send(string(jsonResponse), 0)
-
-			continue
-		}
-
-		switch strings.ToLower(requestType) {
+		switch strings.ToLower(requestType.(string)) {
 
 		case discoveryKey:
 
 			log.Infof("Worker %d: Processing discovery request: ", workerID)
 
-			responseMap := snmp.Discovery(ip, community, version)
+			snmp.Discovery(reqData)
 
-			responseMap[requestIDKey] = requestID
-
-			jsonResponse, _ := json.Marshal(responseMap)
+			jsonResponse, _ := json.Marshal(reqData)
 
 			worker.Send(string(jsonResponse), 0)
 
@@ -218,11 +167,9 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			log.Infof("Worker %d: Processing polling request: ", workerID)
 
-			result := snmp.FetchSNMPData(ip, community, version)
+			snmp.FetchSNMPData(reqData)
 
-			result[requestIDKey] = requestID
-
-			jsonData, _ := json.Marshal(result)
+			jsonData, _ := json.Marshal(reqData)
 
 			log.Infof("Worker %d: sending back response: ", workerID)
 
@@ -230,43 +177,15 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 		default:
 
-			response := map[string]interface{}{
+			reqData["error"] = "request type not supported"
 
-				requestIDKey: requestID,
+			reqData["status"] = "fail"
 
-				"status": "fail",
+			jsonResponse, _ := json.Marshal(reqData)
 
-				"message": "Request type not supported currently",
-			}
-
-			jsonResponse, _ := json.Marshal(response)
-
-			log.Infof("Worker %d: End time after sending response: %v", workerID)
+			log.Infof("Worker %d: sending response: ", workerID)
 
 			worker.Send(string(jsonResponse), 0)
 		}
 	}
-}
-
-// validateRequest checks the presence of required fields in the request data.
-func validateRequest(reqData map[string]string) (map[string]string, map[string]string) {
-
-	missingFields := make(map[string]string)
-
-	values := make(map[string]string)
-
-	for _, field := range []string{ipKey, communityKey, versionKey, pluginTypeKey, requestTypeKey, requestIDKey} {
-
-		value, ok := reqData[field]
-
-		if !ok || value == "" {
-
-			missingFields[field] = errorMissingField
-
-		} else {
-
-			values[field] = value
-		}
-	}
-	return values, missingFields
 }

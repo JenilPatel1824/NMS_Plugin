@@ -6,9 +6,55 @@ import (
 	"time"
 )
 
-// Discovery performs an SNMP GET request to obtain the system name of a device using the provided IP, community, and version.
-// It returns a map with the status (success/fail) and the retrieved system name (if successful).
-func Discovery(ip, community, version string) map[string]interface{} {
+// Constants for keys and messages
+const (
+	IP                 = "ip"
+	PluginType         = "pluginType"
+	RequestID          = "requestID"
+	Community          = "community"
+	Version            = "version"
+	Status             = "status"
+	Data               = "data"
+	SystemName         = "systemName"
+	SNMPPlugin         = "snmp"
+	Fail               = "fail"
+	Success            = "success"
+	FieldMissing       = "field missing"
+	UnsupportedPlugin  = "unsupported plugin type"
+	UnsupportedSNMP    = "unsupported SNMP version"
+	SNMPConnectFail    = "SNMP connection failed"
+	SNMPGetFail        = "SNMP get request failed"
+	SystemNameNotFound = "system name not found"
+	SNMPConnectMsg     = "Connecting to SNMP device at %s"
+	SNMPGetMsg         = "Performing SNMP GET request on %s"
+	SysemNameOid       = "1.3.6.1.2.1.1.5.0"
+	Error_             = "error"
+)
+
+func Discovery(reqData map[string]interface{}) {
+	if ValidateRequest(reqData) {
+		reqData[Error_] = FieldMissing
+
+		reqData[Status] = Fail
+
+		return
+	}
+
+	if reqData[PluginType] != SNMPPlugin {
+		reqData[Error_] = UnsupportedPlugin
+
+		reqData[Status] = Fail
+
+		log.Println(UnsupportedPlugin)
+
+		return
+	}
+
+	ip := reqData[IP].(string)
+
+	community := reqData[Community].(string)
+
+	version := reqData[Version].(string)
 
 	snmp := &gosnmp.GoSNMP{
 		Target:    ip,
@@ -29,55 +75,77 @@ func Discovery(ip, community, version string) map[string]interface{} {
 		snmp.Version = gosnmp.Version3
 
 	default:
+		reqData[Error_] = UnsupportedSNMP
 
-		log.Printf("Unsupported SNMP version: %s. Defaulting to Version2c", version)
+		reqData[Status] = Fail
 
-		snmp.Version = gosnmp.Version2c
+		log.Println(UnsupportedSNMP)
+
+		return
 	}
+
+	log.Printf(SNMPConnectMsg, ip)
 
 	err := snmp.Connect()
 
 	if err != nil {
-		return map[string]interface{}{
+		reqData[Error_] = SNMPConnectFail
 
-			"status": "fail",
+		reqData[Status] = Fail
 
-			"systemName": "",
-		}
+		log.Println(SNMPConnectFail)
+
+		return
 	}
 
 	defer snmp.Conn.Close()
 
-	oid := "1.3.6.1.2.1.1.5.0"
+	oid := SysemNameOid
+
+	log.Printf(SNMPGetMsg, oid)
 
 	result, err := snmp.Get([]string{oid})
 
 	if err != nil {
-		return map[string]interface{}{
+		reqData[Error_] = SNMPGetFail
 
-			"status": "fail",
+		reqData[Status] = Fail
 
-			"systemName": "",
-		}
+		log.Println(SNMPGetFail)
+
+		return
 	}
 
 	for _, variable := range result.Variables {
-
 		if variable.Type == gosnmp.OctetString {
+			reqData[Data] = map[string]interface{}{SystemName: string(variable.Value.([]byte))}
 
-			return map[string]interface{}{
+			reqData[Status] = Success
 
-				"status": "success",
-
-				"systemName": string(variable.Value.([]byte)),
-			}
+			return
 		}
 	}
 
-	return map[string]interface{}{
+	reqData[Error_] = SystemNameNotFound
 
-		"status": "fail",
+	reqData[Status] = Fail
 
-		"systemName": "",
+	log.Println(SystemNameNotFound)
+}
+
+func ValidateRequest(reqData map[string]interface{}) bool {
+
+	hasMissingFields := false
+
+	for _, field := range []string{IP, PluginType, RequestID} {
+
+		value, ok := reqData[field]
+
+		if !ok || value == "" {
+
+			hasMissingFields = true
+		}
 	}
+
+	return !hasMissingFields
 }
