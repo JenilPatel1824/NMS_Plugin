@@ -28,6 +28,8 @@ const (
 // It initializes an SNMP connection, fetches system-level data, extracts interface count, and retrieves interface details.
 func FetchSNMPData(ip, community, version string) map[string]interface{} {
 
+	fmt.Println("calling fetch snmp data")
+
 	g := &gosnmp.GoSNMP{
 		Target:    ip,
 		Community: community,
@@ -35,6 +37,8 @@ func FetchSNMPData(ip, community, version string) map[string]interface{} {
 		Timeout:   2 * time.Second,
 		Retries:   2,
 	}
+
+	fmt.Println("switching version fetch snmpsys data")
 
 	switch version {
 	case "1":
@@ -52,9 +56,9 @@ func FetchSNMPData(ip, community, version string) map[string]interface{} {
 		g.Version = gosnmp.Version2c
 	}
 
-	defer g.Conn.Close()
-
 	err := g.Connect()
+
+	defer g.Conn.Close()
 
 	if err != nil {
 
