@@ -28,12 +28,14 @@ const (
 	SNMPConnectMsg     = "Connecting to SNMP device at %s"
 	SNMPGetMsg         = "Performing SNMP GET request on %s"
 	SysemNameOid       = "1.3.6.1.2.1.1.5.0"
-	Error_             = "error"
+	Errors             = "error"
 )
 
 func Discovery(reqData map[string]interface{}) {
+
 	if ValidateRequest(reqData) {
-		reqData[Error_] = FieldMissing
+
+		reqData[Errors] = FieldMissing
 
 		reqData[Status] = Fail
 
@@ -41,7 +43,8 @@ func Discovery(reqData map[string]interface{}) {
 	}
 
 	if reqData[PluginType] != SNMPPlugin {
-		reqData[Error_] = UnsupportedPlugin
+
+		reqData[Errors] = UnsupportedPlugin
 
 		reqData[Status] = Fail
 
@@ -61,10 +64,11 @@ func Discovery(reqData map[string]interface{}) {
 		Port:      161,
 		Community: community,
 		Timeout:   time.Second * 2,
-		Retries:   3,
+		Retries:   2,
 	}
 
 	switch version {
+
 	case "1":
 		snmp.Version = gosnmp.Version1
 
@@ -75,7 +79,7 @@ func Discovery(reqData map[string]interface{}) {
 		snmp.Version = gosnmp.Version3
 
 	default:
-		reqData[Error_] = UnsupportedSNMP
+		reqData[Errors] = UnsupportedSNMP
 
 		reqData[Status] = Fail
 
@@ -89,7 +93,8 @@ func Discovery(reqData map[string]interface{}) {
 	err := snmp.Connect()
 
 	if err != nil {
-		reqData[Error_] = SNMPConnectFail
+
+		reqData[Errors] = SNMPConnectFail
 
 		reqData[Status] = Fail
 
@@ -107,7 +112,7 @@ func Discovery(reqData map[string]interface{}) {
 	result, err := snmp.Get([]string{oid})
 
 	if err != nil {
-		reqData[Error_] = SNMPGetFail
+		reqData[Errors] = SNMPGetFail
 
 		reqData[Status] = Fail
 
@@ -117,7 +122,9 @@ func Discovery(reqData map[string]interface{}) {
 	}
 
 	for _, variable := range result.Variables {
+
 		if variable.Type == gosnmp.OctetString {
+			
 			reqData[Data] = map[string]interface{}{SystemName: string(variable.Value.([]byte))}
 
 			reqData[Status] = Success
@@ -126,7 +133,7 @@ func Discovery(reqData map[string]interface{}) {
 		}
 	}
 
-	reqData[Error_] = SystemNameNotFound
+	reqData[Errors] = SystemNameNotFound
 
 	reqData[Status] = Fail
 

@@ -14,20 +14,21 @@ import (
 const (
 	routerAddrFormat = "tcp://*:%s"
 	dealerAddr       = "inproc://workers"
-	numWorkers       = 5
-	errorKey         = "error"
-	detailKey        = "details"
+	numWorkers       = 1000
+	errors           = "error"
+	details          = "details"
 	invalidRequest   = "Invalid request format"
-	requestTypeKey   = "requestType"
-	discoveryKey     = "discovery"
-	pollingKey       = "polling"
-	requestIDKey     = "request_id"
+	requestType      = "requestType"
+	discovery        = "discovery"
+	polling          = "polling"
+	requestID        = "request_id"
 	status           = "status"
 	fail             = "fail"
 )
 
 // StartZMQRouter initializes and starts a ZeroMQ Router-Dealer pattern for handling client requests and worker responses.
 func StartZMQRouter(cfg *config.Config, log *logrus.Logger) {
+
 	router, err := zmq4.NewSocket(zmq4.ROUTER)
 
 	if err != nil {
@@ -133,11 +134,11 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			errorResponse := map[string]string{
 
-				requestIDKey: reqData[requestIDKey].(string),
+				requestID: reqData[requestID].(string),
 
-				errorKey: invalidRequest,
+				errors: invalidRequest,
 
-				detailKey: err.Error(),
+				details: err.Error(),
 
 				status: fail,
 			}
@@ -149,11 +150,11 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 			continue
 		}
 
-		requestType := reqData[requestTypeKey]
+		requestType := reqData[requestType]
 
 		switch strings.ToLower(requestType.(string)) {
 
-		case discoveryKey:
+		case discovery:
 
 			log.Infof("Worker %d: Processing discovery request: ", workerID)
 
@@ -163,7 +164,7 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			worker.Send(string(jsonResponse), 0)
 
-		case pollingKey:
+		case polling:
 
 			log.Infof("Worker %d: Processing polling request: ", workerID)
 
@@ -177,9 +178,9 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 		default:
 
-			reqData["error"] = "request type not supported"
+			reqData[errors] = "request type not supported"
 
-			reqData["status"] = "fail"
+			reqData[status] = fail
 
 			jsonResponse, _ := json.Marshal(reqData)
 
