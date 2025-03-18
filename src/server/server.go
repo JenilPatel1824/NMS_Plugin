@@ -179,7 +179,7 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 
 			jsonData, _ := json.Marshal(reqData)
 
-			log.Infof("Worker %d: sending back response: {}", workerID, string(jsonData))
+			log.Infof("Worker %d: sending back response: ", workerID)
 
 			worker.Send(string(jsonData), 0)
 
