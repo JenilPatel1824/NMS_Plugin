@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gosnmp/gosnmp"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,19 +20,18 @@ const (
 	systemInterfaces  = "system.interfaces"
 	interfaces        = "interfaces"
 	Interface_Error   = "interfaces.error"
-	index             = "index"
+	Index             = "index"
 	physicalAddress   = "interface.physical.address"
 	Message           = "message"
 	OID_NOT_FOUND     = "no OIDs found in util.SNMPOids"
 	Nil               = "nil"
 )
 
-// FetchSNMPData retrieves SNMP data from the specified device using provided IP, community, and SNMP version.
-// The function returns a map containing system information and interface details or an error description.
-// It initializes an SNMP connection, fetches system-level data, extracts interface count, and retrieves interface details.
+// FetchSNMPData retrieves SNMP data for a given IP and community string, storing results in reqData.
+// @param reqData map[string]interface{} - Contains request parameters such as IP, community, version, and stores the response.
 func FetchSNMPData(reqData map[string]interface{}) {
 
-	if ValidateRequest(reqData) {
+	if !ValidateRequest(reqData) {
 
 		reqData[Errors] = FieldMissing
 
@@ -40,18 +40,18 @@ func FetchSNMPData(reqData map[string]interface{}) {
 		return
 	}
 
-	ip := reqData[IP]
+	ip := reqData[IP].(string)
 
-	community := reqData[Community]
+	community := reqData[Community].(string)
 
-	version := reqData[Version]
+	version := reqData[Version].(string)
 
 	g := &gosnmp.GoSNMP{
-		Target:    ip.(string),
+		Target:    ip,
 		Port:      161,
-		Community: community.(string),
+		Community: community,
 		Timeout:   time.Millisecond * 500,
-		Retries:   0,
+		Retries:   1,
 	}
 
 	switch version {
@@ -66,7 +66,6 @@ func FetchSNMPData(reqData map[string]interface{}) {
 		g.Version = gosnmp.Version3
 
 	default:
-
 		reqData[Errors] = UnsupportedSNMP
 
 		reqData[Status] = Fail
@@ -74,21 +73,17 @@ func FetchSNMPData(reqData map[string]interface{}) {
 		return
 	}
 
-	err := g.Connect()
-
-	if err != nil {
+	if err := g.Connect(); err != nil {
 
 		reqData[Data] = map[string]interface{}{
 
 			Errors: SNMPConnectFail,
 
-			"message": err.Error(),
+			Message: err.Error(),
 		}
-
 		reqData[Status] = Fail
 
 		return
-
 	}
 
 	defer g.Conn.Close()
@@ -103,49 +98,54 @@ func FetchSNMPData(reqData map[string]interface{}) {
 
 			Message: err.Error(),
 		}
-
 		reqData[Status] = Success
 
 		return
 	}
 
-	numberOfInterface, _ := systemData[systemInterfaces].(int)
+	data := map[string]interface{}{
 
-	data := make(map[string]interface{})
+		systemName: systemData[systemName],
 
-	data[systemName] = systemData[systemName]
+		systemDescription: systemData[systemDescription],
 
-	data[systemDescription] = systemData[systemDescription]
+		systemLocation: systemData[systemLocation],
 
-	data[systemLocation] = systemData[systemLocation]
+		systemObjectID: systemData[systemObjectID],
+	}
 
-	data[systemObjectID] = systemData[systemObjectID]
+	if uptime, ok := systemData[systemUptime].(uint32); ok {
 
-	uptime := systemData[systemUptime].(uint32)
+		uptimeSeconds := uptime / 100
 
-	uptimeSeconds := uptime / 100
+		days := uptimeSeconds / (24 * 3600)
 
-	days := uptimeSeconds / (24 * 3600)
+		uptimeSeconds %= (24 * 3600)
 
-	uptimeSeconds %= (24 * 3600)
+		hours := uptimeSeconds / 3600
 
-	hours := uptimeSeconds / 3600
+		uptimeSeconds %= 3600
 
-	uptimeSeconds %= 3600
+		minutes := uptimeSeconds / 60
 
-	minutes := uptimeSeconds / 60
+		seconds := uptimeSeconds % 60
 
-	seconds := uptimeSeconds % 60
+		data[systemUptime] = fmt.Sprintf("Uptime: %d days, %02d hours, %02d minutes, %02d seconds", days, hours, minutes, seconds)
+	}
 
-	uptimeString := fmt.Sprintf("Uptime: %d days, %02d hours, %02d minutes, %02d seconds", days, hours, minutes, seconds)
+	indexes, err := getInterfaceIndexes(g)
 
-	data[systemUptime] = uptimeString
+	if err != nil {
 
-	data[systemInterfaces] = systemData[systemInterfaces]
+		data[Interface_Error] = fmt.Sprintf("Error fetching interface indexes: %s", err)
 
-	if numberOfInterface > 0 {
+		data[systemInterfaces] = 0
 
-		interfacesData, err := getInterfaces(g, numberOfInterface)
+	} else {
+
+		data[systemInterfaces] = len(indexes)
+
+		interfacesData, err := getInterfaces(g, indexes)
 
 		if err != nil {
 
@@ -154,39 +154,32 @@ func FetchSNMPData(reqData map[string]interface{}) {
 		} else {
 
 			data[interfaces] = interfacesData
-
 		}
-	} else {
-
-		data[interfaces] = []map[string]string{}
-
 	}
 
 	reqData[Data] = data
 
 	reqData[Status] = Success
-
-	return
 }
 
-// fetchSNMPSystemData queries SNMP system data using provided GoSNMP instance and configured OIDs.
-// It returns a map of SNMP data with human-readable keys or an error if the operation fails.
+// fetchSNMPSystemData retrieves system-related SNMP data using predefined OIDs.
+// @param g *gosnmp.GoSNMP - SNMP client used to query the target device.
+// @return map[string]interface{} - A map containing SNMP system data.
+// @return error - Error if SNMP retrieval fails or no OIDs are found.
 func fetchSNMPSystemData(g *gosnmp.GoSNMP) (map[string]interface{}, error) {
 
 	snmpData := make(map[string]interface{})
 
-	oidArray := []string{}
+	oidArray := make([]string, 0, len(util.SNMPOids))
 
 	for oid := range util.SNMPOids {
 
 		oidArray = append(oidArray, oid)
-
 	}
 
 	if len(oidArray) == 0 {
 
 		return nil, fmt.Errorf(OID_NOT_FOUND)
-
 	}
 
 	result, err := g.Get(oidArray)
@@ -194,54 +187,116 @@ func fetchSNMPSystemData(g *gosnmp.GoSNMP) (map[string]interface{}, error) {
 	if err != nil {
 
 		return nil, err
-
 	}
 
 	for i, variable := range result.Variables {
 
-		var valueStr interface{}
+		var value interface{}
 
 		if variable.Value == nil {
 
-			valueStr = Nil
+			value = Nil
+
+		} else if bytes, ok := variable.Value.([]byte); ok {
+
+			value = string(bytes)
 
 		} else {
 
-			if bytes, ok := variable.Value.([]byte); ok {
-
-				valueStr = string(bytes)
-
-			} else {
-
-				valueStr = variable.Value
-			}
-
+			value = variable.Value
 		}
 
-		oidKey := oidArray[i]
-
-		snmpData[util.SNMPOids[oidKey]] = valueStr
+		snmpData[util.SNMPOids[oidArray[i]]] = value
 	}
 	return snmpData, nil
 }
 
-// getInterface retrieves SNMP interface data for a specific index and sends it to the provided channel.
-// It queries OIDs for the interface defined in the configuration and processes the SNMP responses.
-// Parameters include the interface index (i), an SNMP client (g), a channel for sending interface data (ch),
-// a wait group for synchronization (wg), and a mutex for threading-safe SNMP operations (mutexForSnmp).
-func getInterface(i int, g *gosnmp.GoSNMP) (map[string]interface{}, error) {
+// getInterfaceIndexes retrieves the indexes of device interfaces using SNMP walk on the specified OID.
+// @param g *gosnmp.GoSNMP - SNMP client used to query the target device.
+// @return []int - A list of interface indexes.
+// @return error - Error if SNMP walk fails or index parsing fails.
+func getInterfaceIndexes(g *gosnmp.GoSNMP) ([]int, error) {
+
+	var indexes []int
+
+	targetOID := ".1.3.6.1.2.1.31.1.1.1.1"
+
+	err := g.Walk(targetOID, func(pdu gosnmp.SnmpPDU) error {
+
+		oidParts := strings.Split(pdu.Name, ".")
+
+		if len(oidParts) == 0 {
+
+			return fmt.Errorf("invalid OID: %s", pdu.Name)
+		}
+
+		oidSuffix := oidParts[len(oidParts)-1]
+
+		index, err := strconv.Atoi(oidSuffix)
+
+		if err != nil {
+
+			return fmt.Errorf("failed to parse index: %v", err)
+		}
+
+		indexes = append(indexes, index)
+
+		return nil
+	})
+
+	if err != nil {
+
+		return nil, fmt.Errorf("SNMP walk failed: %v", err)
+	}
+
+	return indexes, nil
+}
+
+// getInterfaces retrieves SNMP data for multiple network interfaces based on their indexes
+// and aggregates the results. It queries each interface using its index and collects the data.
+// @param g *gosnmp.GoSNMP - SNMP client used to query the target device for interface details.
+// @param indexes []int - List of interface indexes to fetch SNMP data for each interface.
+// @return []map[string]interface{} - A list of maps where each map contains SNMP data of an interface.
+// @return error - Returns an error if SNMP data retrieval for interfaces encounters a failure.
+func getInterfaces(g *gosnmp.GoSNMP, indexes []int) ([]map[string]interface{}, error) {
+
+	interfacesData := make([]map[string]interface{}, 0, len(indexes))
+
+	for _, index := range indexes {
+
+		data, err := getInterface(index, g)
+
+		if err != nil {
+
+			log.Printf("Error fetching interface %d: %v (continuing)", index, err)
+
+			continue
+		}
+
+		interfacesData = append(interfacesData, data)
+	}
+	return interfacesData, nil
+}
+
+// getInterface retrieves SNMP data for a specific network interface based on its index.
+// It queries the device for interface details and formats the data accordingly.
+// @param index int - The index of the network interface to fetch SNMP data for.
+// @param g *gosnmp.GoSNMP - SNMP client used to query the target device.
+// @return map[string]interface{} - A map containing SNMP data of the interface.
+// @return error - Returns an error if SNMP data retrieval fails.
+func getInterface(index int, g *gosnmp.GoSNMP) (map[string]interface{}, error) {
 
 	interfaceData := make(map[string]interface{})
 
-	interfaceData[index] = fmt.Sprintf("%d", i)
+	interfaceData[Index] = fmt.Sprintf("%d", index)
 
-	var oids []string
+	oids := make([]string, 0, len(util.InterfaceOids))
 
-	var fields []string
+	fields := make([]string, 0, len(util.InterfaceOids))
 
 	for oid, field := range util.InterfaceOids {
 
-		oids = append(oids, oid+"."+fmt.Sprintf("%d", i))
+		oids = append(oids, fmt.Sprintf("%s.%d", oid, index))
 
 		fields = append(fields, field)
 	}
@@ -250,70 +305,50 @@ func getInterface(i int, g *gosnmp.GoSNMP) (map[string]interface{}, error) {
 
 	if err != nil {
 
-		log.Printf("Failed to fetch data for interface %d: %s", i, err)
-
-		interfaceData[Interface_Error] = fmt.Sprintf("Failed to fetch data: %s", err)
+		interfaceData[Interface_Error] = fmt.Sprintf("SNMP get failed: %v", err)
 
 		return interfaceData, err
 	}
 
 	for k, variable := range result.Variables {
 
-		if variable.Value != nil {
+		if variable.Value == nil {
 
-			field := fields[k]
+			continue
+		}
 
-			var value interface{}
+		field := fields[k]
 
-			if bytes, ok := variable.Value.([]byte); ok {
+		var value interface{}
 
-				if field == physicalAddress {
+		if bytes, ok := variable.Value.([]byte); ok {
 
-					mac := hex.EncodeToString(bytes)
+			if field == physicalAddress {
 
-					formattedMac := ""
+				mac := hex.EncodeToString(bytes)
 
-					for i := 0; i < len(mac); i += 2 {
+				formattedMac := strings.ToUpper(mac)
 
-						formattedMac += strings.ToUpper(mac[i:i+2]) + " "
+				if len(formattedMac) >= 12 {
 
-					}
-
-					value = strings.TrimSpace(formattedMac)
-
-				} else {
-
-					value = string(bytes)
+					formattedMac = fmt.Sprintf("%s:%s:%s:%s:%s:%s",
+						formattedMac[0:2], formattedMac[2:4],
+						formattedMac[4:6], formattedMac[6:8],
+						formattedMac[8:10], formattedMac[10:12])
 				}
+
+				value = formattedMac
 
 			} else {
 
-				value = variable.Value
+				value = string(bytes)
 			}
+		} else {
 
-			interfaceData[field] = value
+			value = variable.Value
 		}
-	}
 
+		interfaceData[field] = value
+	}
 	return interfaceData, nil
-
-}
-
-// getInterfaces retrieves SNMP data for a specified number of interfaces using a GoSNMP client.
-// It spawns concurrent goroutines for each interface and collects data into a slice of maps.
-// Returns the slice of maps containing interface data or an error if the operation fails.
-func getInterfaces(g *gosnmp.GoSNMP, numInterfaces int) ([]map[string]interface{}, error) {
-
-	interfacesData := make([]map[string]interface{}, 0, numInterfaces)
-
-	for i := 1; i <= numInterfaces; i++ {
-
-		data, err := getInterface(i, g)
-
-		if err != nil {
-			return nil, err
-		}
-		interfacesData = append(interfacesData, data)
-	}
-	return interfacesData, nil
 }

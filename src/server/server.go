@@ -14,7 +14,7 @@ import (
 const (
 	routerAddrFormat = "tcp://*:%s"
 	dealerAddr       = "inproc://workers"
-	numWorkers       = 1000
+	numWorkers       = 5
 	errors           = "error"
 	details          = "details"
 	invalidRequest   = "Invalid request format"
@@ -122,6 +122,13 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 		if err != nil {
 
 			log.Errorf("Worker %d: Failed to receive message: %v", workerID, err)
+
+			continue
+		}
+
+		if req == "health_check" {
+
+			worker.Send("ok", 0)
 
 			continue
 		}

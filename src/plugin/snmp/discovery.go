@@ -31,6 +31,10 @@ const (
 	Errors             = "error"
 )
 
+// Discovery performs SNMP discovery for a given network device.
+// It validates the request, establishes an SNMP connection, and retrieves system information.
+// @param reqData map[string]interface{} - A map containing request data including IP, community, and SNMP version.
+// If validation fails, error messages and status updates are stored in reqData.
 func Discovery(reqData map[string]interface{}) {
 
 	if ValidateRequest(reqData) {
@@ -124,7 +128,7 @@ func Discovery(reqData map[string]interface{}) {
 	for _, variable := range result.Variables {
 
 		if variable.Type == gosnmp.OctetString {
-			
+
 			reqData[Data] = map[string]interface{}{SystemName: string(variable.Value.([]byte))}
 
 			reqData[Status] = Success
@@ -140,6 +144,9 @@ func Discovery(reqData map[string]interface{}) {
 	log.Println(SystemNameNotFound)
 }
 
+// ValidateRequest checks whether the required fields are present in the request data.
+// @param reqData map[string]interface{} - The request data containing key-value pairs.
+// @return bool - Returns true if all required fields are present, otherwise false.
 func ValidateRequest(reqData map[string]interface{}) bool {
 
 	hasMissingFields := false

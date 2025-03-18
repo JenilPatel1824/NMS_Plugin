@@ -12,6 +12,7 @@ var SNMPOids = map[string]string{
 
 // InterfaceOids OIDs for SNMP interface data
 var InterfaceOids = map[string]string{
+
 	"1.3.6.1.2.1.2.2.1.1":     "interface.index",
 	"1.3.6.1.2.1.31.1.1.1.1":  "interface.name",
 	"1.3.6.1.2.1.31.1.1.1.18": "interface.alias",
