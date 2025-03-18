@@ -3,6 +3,7 @@ package snmp
 import (
 	"github.com/gosnmp/gosnmp"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -10,7 +11,7 @@ import (
 const (
 	IP                 = "ip"
 	PluginType         = "pluginType"
-	RequestID          = "requestID"
+	RequestID          = "requestId"
 	Community          = "community"
 	Version            = "version"
 	Status             = "status"
@@ -37,7 +38,7 @@ const (
 // If validation fails, error messages and status updates are stored in reqData.
 func Discovery(reqData map[string]interface{}) {
 
-	if ValidateRequest(reqData) {
+	if !ValidateRequest(reqData) {
 
 		reqData[Errors] = FieldMissing
 
@@ -149,17 +150,24 @@ func Discovery(reqData map[string]interface{}) {
 // @return bool - Returns true if all required fields are present, otherwise false.
 func ValidateRequest(reqData map[string]interface{}) bool {
 
-	hasMissingFields := false
+	requiredFields := []string{IP, PluginType, RequestID}
 
-	for _, field := range []string{IP, PluginType, RequestID} {
+	for _, field := range requiredFields {
 
-		value, ok := reqData[field]
+		value, exists := reqData[field]
 
-		if !ok || value == "" {
+		if !exists {
 
-			hasMissingFields = true
+			return false
+		}
+
+		Value, ok := value.(string)
+
+		if !ok || strings.TrimSpace(Value) == "" {
+
+			return false
 		}
 	}
 
-	return !hasMissingFields
+	return true
 }
