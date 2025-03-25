@@ -30,6 +30,7 @@ const (
 	SNMPGetMsg         = "Performing SNMP GET request on %s"
 	SysemNameOid       = "1.3.6.1.2.1.1.5.0"
 	Errors             = "error"
+	Port               = "port"
 )
 
 // Discovery performs SNMP discovery for a given network device.
@@ -64,9 +65,11 @@ func Discovery(reqData map[string]interface{}) {
 
 	version := reqData[Version].(string)
 
+	port := reqData[Port]
+
 	snmp := &gosnmp.GoSNMP{
 		Target:    ip,
-		Port:      161,
+		Port:      uint16(port.(int)),
 		Community: community,
 		Timeout:   time.Second * 2,
 		Retries:   2,
@@ -150,7 +153,7 @@ func Discovery(reqData map[string]interface{}) {
 // @return bool - Returns true if all required fields are present, otherwise false.
 func ValidateRequest(reqData map[string]interface{}) bool {
 
-	requiredFields := []string{IP, PluginType, RequestID}
+	requiredFields := []string{IP, PluginType, RequestID, Port}
 
 	for _, field := range requiredFields {
 
@@ -159,6 +162,15 @@ func ValidateRequest(reqData map[string]interface{}) bool {
 		if !exists {
 
 			return false
+		}
+
+		if field == Port {
+
+			if v, ok := value.(float64); ok {
+
+				reqData[field] = int(v)
+			}
+			continue
 		}
 
 		Value, ok := value.(string)

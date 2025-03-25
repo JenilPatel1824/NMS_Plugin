@@ -46,9 +46,11 @@ func FetchSNMPData(reqData map[string]interface{}) {
 
 	version := reqData[Version].(string)
 
+	port := reqData[Port]
+
 	g := &gosnmp.GoSNMP{
 		Target:    ip,
-		Port:      161,
+		Port:      uint16(port.(int)),
 		Community: community,
 		Timeout:   time.Millisecond * 500,
 		Retries:   1,
