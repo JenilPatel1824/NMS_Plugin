@@ -24,6 +24,8 @@ const (
 	requestID        = "request_id"
 	status           = "status"
 	fail             = "fail"
+	health_check     = "health_check"
+	ok               = "ok"
 )
 
 // StartZMQRouter initializes and starts a ZeroMQ Router-Dealer pattern for handling client requests and worker responses.
@@ -126,9 +128,9 @@ func startWorker(dealerAddr string, workerID int, log *logrus.Logger, wg *sync.W
 			continue
 		}
 
-		if req == "health_check" {
+		if req == health_check {
 
-			worker.Send("ok", 0)
+			worker.Send(ok, 0)
 
 			continue
 		}

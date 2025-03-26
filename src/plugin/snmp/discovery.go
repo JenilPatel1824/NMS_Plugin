@@ -120,11 +120,10 @@ func Discovery(reqData map[string]interface{}) {
 	result, err := snmp.Get([]string{oid})
 
 	if err != nil {
+		
 		reqData[Errors] = SNMPGetFail
 
 		reqData[Status] = Fail
-
-		log.Println(SNMPGetFail)
 
 		return
 	}
