@@ -31,32 +31,15 @@ const (
 // @param reqData map[string]interface{} - Contains request parameters such as IP, community, version, and stores the response.
 func FetchSNMPData(reqData map[string]interface{}) {
 
-	if !ValidateRequest(reqData) {
-
-		reqData[Errors] = FieldMissing
-
-		reqData[Status] = Fail
-
-		return
-	}
-
-	ip := reqData[IP].(string)
-
-	community := reqData[Community].(string)
-
-	version := reqData[Version].(string)
-
-	port := reqData[Port]
-
 	g := &gosnmp.GoSNMP{
-		Target:    ip,
-		Port:      uint16(port.(int)),
-		Community: community,
+		Target:    reqData[IP].(string),
+		Port:      uint16(reqData[Port].(float64)),
+		Community: reqData[Community].(string),
 		Timeout:   time.Millisecond * 500,
-		Retries:   1,
+		Retries:   0,
 	}
 
-	switch version {
+	switch reqData[Version].(string) {
 
 	case "1":
 		g.Version = gosnmp.Version1
@@ -68,11 +51,16 @@ func FetchSNMPData(reqData map[string]interface{}) {
 		g.Version = gosnmp.Version3
 
 	default:
-		reqData[Errors] = UnsupportedSNMP
 
-		reqData[Status] = Fail
+		reqData[Data] = map[string]interface{}{
+
+			Errors: UnsupportedSNMP,
+		}
+
+		reqData[Status] = Success
 
 		return
+
 	}
 
 	if err := g.Connect(); err != nil {
@@ -83,7 +71,8 @@ func FetchSNMPData(reqData map[string]interface{}) {
 
 			Message: err.Error(),
 		}
-		reqData[Status] = Fail
+
+		reqData[Status] = Success
 
 		return
 	}

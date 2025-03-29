@@ -15,5 +15,5 @@ func main() {
 
 	log.Info("Starting Polling Engine...")
 
-	server.StartZMQRouter(cfg, log)
+	server.StartPull(cfg, log)
 }

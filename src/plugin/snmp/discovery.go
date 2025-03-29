@@ -20,7 +20,6 @@ const (
 	SNMPPlugin         = "snmp"
 	Fail               = "fail"
 	Success            = "success"
-	FieldMissing       = "field missing"
 	UnsupportedPlugin  = "unsupported plugin type"
 	UnsupportedSNMP    = "unsupported SNMP version"
 	SNMPConnectFail    = "SNMP connection failed"
@@ -39,15 +38,6 @@ const (
 // If validation fails, error messages and status updates are stored in reqData.
 func Discovery(reqData map[string]interface{}) {
 
-	if !ValidateRequest(reqData) {
-
-		reqData[Errors] = FieldMissing
-
-		reqData[Status] = Fail
-
-		return
-	}
-
 	if reqData[PluginType] != SNMPPlugin {
 
 		reqData[Errors] = UnsupportedPlugin
@@ -59,23 +49,15 @@ func Discovery(reqData map[string]interface{}) {
 		return
 	}
 
-	ip := reqData[IP].(string)
-
-	community := reqData[Community].(string)
-
-	version := reqData[Version].(string)
-
-	port := reqData[Port]
-
 	snmp := &gosnmp.GoSNMP{
-		Target:    ip,
-		Port:      uint16(port.(int)),
-		Community: community,
-		Timeout:   time.Second * 2,
-		Retries:   2,
+		Target:    reqData[IP].(string),
+		Port:      uint16(reqData[Port].(float64)),
+		Community: reqData[Community].(string),
+		Timeout:   time.Millisecond * 500,
+		Retries:   0,
 	}
 
-	switch version {
+	switch reqData[Version].(string) {
 
 	case "1":
 		snmp.Version = gosnmp.Version1
@@ -96,7 +78,7 @@ func Discovery(reqData map[string]interface{}) {
 		return
 	}
 
-	log.Printf(SNMPConnectMsg, ip)
+	log.Printf(SNMPConnectMsg, reqData[IP].(string))
 
 	err := snmp.Connect()
 
@@ -120,7 +102,7 @@ func Discovery(reqData map[string]interface{}) {
 	result, err := snmp.Get([]string{oid})
 
 	if err != nil {
-		
+
 		reqData[Errors] = SNMPGetFail
 
 		reqData[Status] = Fail
