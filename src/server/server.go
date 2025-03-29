@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	errors              = "error"
 	requestType         = "requestType"
 	discovery           = "discovery"
 	polling             = "polling"
