@@ -15,8 +15,6 @@ const (
 	requestType         = "requestType"
 	discovery           = "discovery"
 	polling             = "polling"
-	status              = "status"
-	fail                = "fail"
 	health_check        = "health_check"
 	ok                  = "ok"
 	numDiscoveryWorkers = 10

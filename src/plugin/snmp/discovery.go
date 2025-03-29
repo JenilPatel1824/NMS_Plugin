@@ -17,12 +17,12 @@ const (
 	Status             = "status"
 	Data               = "data"
 	SystemName         = "systemName"
-	SNMPPlugin         = "snmp"
+	SNMP               = "snmp"
 	Fail               = "fail"
 	Success            = "success"
 	UnsupportedPlugin  = "unsupported plugin type"
 	UnsupportedSNMP    = "unsupported SNMP version"
-	SNMPConnectFail    = "SNMP connection failed"
+	SnmpConnectFail    = "SNMP connection failed"
 	SNMPGetFail        = "SNMP get request failed"
 	SystemNameNotFound = "system name not found"
 	SNMPConnectMsg     = "Connecting to SNMP device at %s"
@@ -38,7 +38,7 @@ const (
 // If validation fails, error messages and status updates are stored in reqData.
 func Discovery(reqData map[string]interface{}) {
 
-	if reqData[PluginType] != SNMPPlugin {
+	if reqData[PluginType] != SNMP {
 
 		reqData[Errors] = UnsupportedPlugin
 
@@ -84,11 +84,11 @@ func Discovery(reqData map[string]interface{}) {
 
 	if err != nil {
 
-		reqData[Errors] = SNMPConnectFail
+		reqData[Errors] = SnmpConnectFail
 
 		reqData[Status] = Fail
 
-		log.Println(SNMPConnectFail)
+		log.Println(SnmpConnectFail)
 
 		return
 	}

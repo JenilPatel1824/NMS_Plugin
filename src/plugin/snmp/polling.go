@@ -19,11 +19,11 @@ const (
 	systemUptime      = "system.uptime"
 	systemInterfaces  = "system.interfaces"
 	interfaces        = "interfaces"
-	Interface_Error   = "interfaces.error"
+	InterfaceError    = "interfaces.error"
 	Index             = "index"
 	physicalAddress   = "interface.physical.address"
 	Message           = "message"
-	OID_NOT_FOUND     = "no OIDs found in util.SNMPOids"
+	OidNotFound       = "no OIDs found in util.SNMPOids"
 	Nil               = "nil"
 )
 
@@ -67,7 +67,7 @@ func FetchSNMPData(reqData map[string]interface{}) {
 
 		reqData[Data] = map[string]interface{}{
 
-			Errors: SNMPConnectFail,
+			Errors: SnmpConnectFail,
 
 			Message: err.Error(),
 		}
@@ -85,7 +85,7 @@ func FetchSNMPData(reqData map[string]interface{}) {
 
 		reqData[Data] = map[string]interface{}{
 
-			Errors: SNMPConnectFail,
+			Errors: SnmpConnectFail,
 
 			Message: err.Error(),
 		}
@@ -128,7 +128,7 @@ func FetchSNMPData(reqData map[string]interface{}) {
 
 	if err != nil {
 
-		data[Interface_Error] = fmt.Sprintf("Error fetching interface indexes: %s", err)
+		data[InterfaceError] = fmt.Sprintf("Error fetching interface indexes: %s", err)
 
 		data[systemInterfaces] = 0
 
@@ -140,7 +140,7 @@ func FetchSNMPData(reqData map[string]interface{}) {
 
 		if err != nil {
 
-			data[Interface_Error] = fmt.Sprintf("Error fetching interface data: %s", err)
+			data[InterfaceError] = fmt.Sprintf("Error fetching interface data: %s", err)
 
 		} else {
 
@@ -170,7 +170,7 @@ func fetchSNMPSystemData(g *gosnmp.GoSNMP) (map[string]interface{}, error) {
 
 	if len(oidArray) == 0 {
 
-		return nil, fmt.Errorf(OID_NOT_FOUND)
+		return nil, fmt.Errorf(OidNotFound)
 	}
 
 	result, err := g.Get(oidArray)
@@ -296,7 +296,7 @@ func getInterface(index int, g *gosnmp.GoSNMP) (map[string]interface{}, error) {
 
 	if err != nil {
 
-		interfaceData[Interface_Error] = fmt.Sprintf("SNMP get failed: %v", err)
+		interfaceData[InterfaceError] = fmt.Sprintf("SNMP get failed: %v", err)
 
 		return interfaceData, err
 	}
